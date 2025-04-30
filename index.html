@@ -49,6 +49,16 @@
     ul {
       padding-left: 20px;
     }
+    .action-list {
+      list-style-type: none;
+      padding: 0;
+    }
+    .action-item {
+      margin: 10px 0;
+      background: #e9ecef;
+      padding: 10px;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -69,4 +79,193 @@
     <h2>📘 Record an Expense</h2>
     <input type="text" id="expenseDesc" placeholder="Expense description"/>
     <input type="number" id="expenseAmt" placeholder="Expense amount"/>
-    <button onclick="recordExpense(
+    <button onclick="recordExpense()">Record</button>
+    <ul id="expenseList"></ul>
+  </div>
+
+  <!-- 3. Expected Purchases -->
+  <div class="section">
+    <h2>📝 Expected Purchases</h2>
+    <textarea id="expected" rows="5" placeholder="List future purchases here..."></textarea>
+  </div>
+
+  <!-- 4. Action History -->
+  <div class="section">
+    <h2>🧾 Action History</h2>
+    <ul id="actionHistory" class="action-list"></ul>
+  </div>
+
+  <!-- 5. Balance Over Time Chart -->
+  <div class="section">
+    <h2>📈 Balance Over Time</h2>
+    <canvas id="trendChart"></canvas>
+  </div>
+
+  <script>
+    let balance = 0;
+    let expenses = [];
+    let balanceHistory = [];
+    let actionHistory = []; // Keeps track of last 10 actions
+    let lastAction = null;
+
+    function loadData() {
+      balance = parseFloat(localStorage.getItem("capitalBalance")) || 0;
+      expenses = JSON.parse(localStorage.getItem("capitalExpenses") || "[]");
+      balanceHistory = JSON.parse(localStorage.getItem("capitalBalanceHistory") || "[]");
+      actionHistory = JSON.parse(localStorage.getItem("capitalActionHistory") || "[]");
+      document.getElementById("expected").value = localStorage.getItem("capitalExpected") || "";
+
+      document.getElementById("balance").textContent = balance.toFixed(2);
+      renderExpenseList();
+      renderActionHistory();
+      updateChart();
+    }
+
+    function saveData() {
+      localStorage.setItem("capitalBalance", balance.toString());
+      localStorage.setItem("capitalExpenses", JSON.stringify(expenses));
+      localStorage.setItem("capitalBalanceHistory", JSON.stringify(balanceHistory));
+      localStorage.setItem("capitalActionHistory", JSON.stringify(actionHistory));
+    }
+
+    function addMoney() {
+      const amt = parseFloat(document.getElementById("amount").value);
+      if (!isNaN(amt)) {
+        balance += amt;
+        recordBalance();
+        const action = { type: "add", amount: amt, balance: balance.toFixed(2), date: new Date().toISOString() };
+        actionHistory.push(action);
+        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
+        lastAction = action;
+        updateAll();
+      }
+    }
+
+    function deductMoney() {
+      const amt = parseFloat(document.getElementById("amount").value);
+      if (!isNaN(amt)) {
+        balance -= amt;
+        recordBalance();
+        const action = { type: "deduct", amount: amt, balance: balance.toFixed(2), date: new Date().toISOString() };
+        actionHistory.push(action);
+        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
+        lastAction = action;
+        updateAll();
+      }
+    }
+
+    function recordExpense() {
+      const desc = document.getElementById("expenseDesc").value.trim();
+      const amt = parseFloat(document.getElementById("expenseAmt").value);
+      if (desc && !isNaN(amt)) {
+        expenses.push({ desc, amt });
+        balance -= amt;
+        recordBalance();
+        const action = { type: "expense", amount: amt, description: desc, balance: balance.toFixed(2), date: new Date().toISOString() };
+        actionHistory.push(action);
+        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
+        lastAction = action;
+        updateAll();
+        document.getElementById("expenseDesc").value = "";
+        document.getElementById("expenseAmt").value = "";
+      }
+    }
+
+    function undoAction(index) {
+      const action = actionHistory[index];
+      if (action.type === "add") {
+        balance -= action.amount;
+      } else if (action.type === "deduct") {
+        balance += action.amount;
+      } else if (action.type === "expense") {
+        balance += action.amount;
+        expenses.pop(); // remove last expense
+      }
+
+      balanceHistory.pop();
+      actionHistory.splice(index, 1); // Remove undone action from history
+      lastAction = null;
+      updateAll();
+    }
+
+    function recordBalance() {
+      const today = new Date().toISOString().split("T")[0];
+      balanceHistory.push({ date: today, balance: parseFloat(balance.toFixed(2)) });
+    }
+
+    function updateAll() {
+      document.getElementById("balance").textContent = balance.toFixed(2);
+      renderExpenseList();
+      renderActionHistory();
+      saveData();
+      updateChart();
+    }
+
+    function renderExpenseList() {
+      const list = document.getElementById("expenseList");
+      list.innerHTML = "";
+      expenses.forEach(exp => {
+        const item = document.createElement("li");
+        item.textContent = `${exp.desc} - $${exp.amt.toFixed(2)}`;
+        list.appendChild(item);
+      });
+    }
+
+    function renderActionHistory() {
+      const list = document.getElementById("actionHistory");
+      list.innerHTML = "";
+      actionHistory.forEach((action, index) => {
+        const item = document.createElement("li");
+        item.classList.add("action-item");
+        let actionText = '';
+        if (action.type === 'add') actionText = `Added $${action.amount}`;
+        if (action.type === 'deduct') actionText = `Deducted $${action.amount}`;
+        if (action.type === 'expense') actionText = `Expense: ${action.description} - $${action.amount}`;
+        item.innerHTML = `${actionText} | Balance: $${action.balance} <button onclick="undoAction(${index})" class="undo-btn">Undo</button>`;
+        list.appendChild(item);
+      });
+    }
+
+    document.getElementById("expected").addEventListener("input", () => {
+      localStorage.setItem("capitalExpected", document.getElementById("expected").value);
+    });
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Balance Over Time',
+          data: [],
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0,123,255,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            title: { display: true, text: 'Date' }
+          },
+          y: {
+            title: { display: true, text: 'Balance ($)' },
+            beginAtZero: true
+          }
+        }
+      }
+    });
+
+    function updateChart() {
+      const dates = balanceHistory.map(e => e.date);
+      const balances = balanceHistory.map(e => e.balance);
+
+      trendChart.data.labels = dates;
+      trendChart.data.datasets[0].data = balances;
+      trendChart.update();
+    }
+
