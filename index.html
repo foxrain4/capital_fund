@@ -4,16 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Capital Fund Manager</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: sans-serif;
       background: #f4f4f4;
       padding: 20px;
-      max-width: 800px;
+      max-width: 600px;
       margin: auto;
     }
-    h1, h2 {
+    h1 {
+      text-align: center;
       color: #333;
     }
     .section {
@@ -23,7 +23,7 @@
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    input, textarea {
+    input {
       width: 100%;
       padding: 10px;
       margin-top: 5px;
@@ -46,19 +46,6 @@
     .undo-btn {
       background-color: crimson;
     }
-    ul {
-      padding-left: 20px;
-    }
-    .action-list {
-      list-style-type: none;
-      padding: 0;
-    }
-    .action-item {
-      margin: 10px 0;
-      background: #e9ecef;
-      padding: 10px;
-      border-radius: 6px;
-    }
   </style>
 </head>
 <body>
@@ -74,201 +61,63 @@
     <button onclick="undoLastAction()" class="undo-btn">Undo Last Action</button>
   </div>
 
-  <!-- 2. Expense Recorder -->
-  <div class="section">
-    <h2>📘 Record an Expense</h2>
-    <input type="text" id="expenseDesc" placeholder="Expense description"/>
-    <input type="number" id="expenseAmt" placeholder="Expense amount"/>
-    <button onclick="recordExpense()">Record</button>
-    <ul id="expenseList"></ul>
-  </div>
-
-  <!-- 3. Expected Purchases -->
-  <div class="section">
-    <h2>📝 Expected Purchases</h2>
-    <textarea id="expected" rows="5" placeholder="List future purchases here..."></textarea>
-  </div>
-
-  <!-- 4. Action History -->
-  <div class="section">
-    <h2>🧾 Action History</h2>
-    <ul id="actionHistory" class="action-list"></ul>
-  </div>
-
-  <!-- 5. Balance Over Time Chart -->
-  <div class="section">
-    <h2>📈 Balance Over Time</h2>
-    <canvas id="trendChart"></canvas>
-  </div>
-
   <script>
     let balance = 0;
-    let expenses = [];
-    let balanceHistory = [];
-    let actionHistory = []; // Keeps track of last 10 actions
-    let lastAction = null;
+    let actionHistory = []; // Keeps track of actions for undo
 
+    // Load the saved data from localStorage
     function loadData() {
       balance = parseFloat(localStorage.getItem("capitalBalance")) || 0;
-      expenses = JSON.parse(localStorage.getItem("capitalExpenses") || "[]");
-      balanceHistory = JSON.parse(localStorage.getItem("capitalBalanceHistory") || "[]");
-      actionHistory = JSON.parse(localStorage.getItem("capitalActionHistory") || "[]");
-      document.getElementById("expected").value = localStorage.getItem("capitalExpected") || "";
-
+      actionHistory = JSON.parse(localStorage.getItem("capitalActionHistory")) || [];
       document.getElementById("balance").textContent = balance.toFixed(2);
-      renderExpenseList();
-      renderActionHistory();
-      updateChart();
     }
 
+    // Save the current data to localStorage
     function saveData() {
       localStorage.setItem("capitalBalance", balance.toString());
-      localStorage.setItem("capitalExpenses", JSON.stringify(expenses));
-      localStorage.setItem("capitalBalanceHistory", JSON.stringify(balanceHistory));
       localStorage.setItem("capitalActionHistory", JSON.stringify(actionHistory));
     }
 
+    // Add funds to the balance
     function addMoney() {
       const amt = parseFloat(document.getElementById("amount").value);
       if (!isNaN(amt)) {
         balance += amt;
-        recordBalance();
-        const action = { type: "add", amount: amt, balance: balance.toFixed(2), date: new Date().toISOString() };
-        actionHistory.push(action);
-        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
-        lastAction = action;
+        actionHistory.push({ type: 'add', amount: amt, balance: balance.toFixed(2) });
         updateAll();
       }
     }
 
+    // Deduct funds from the balance
     function deductMoney() {
       const amt = parseFloat(document.getElementById("amount").value);
       if (!isNaN(amt)) {
         balance -= amt;
-        recordBalance();
-        const action = { type: "deduct", amount: amt, balance: balance.toFixed(2), date: new Date().toISOString() };
-        actionHistory.push(action);
-        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
-        lastAction = action;
+        actionHistory.push({ type: 'deduct', amount: amt, balance: balance.toFixed(2) });
         updateAll();
       }
     }
 
-    function recordExpense() {
-      const desc = document.getElementById("expenseDesc").value.trim();
-      const amt = parseFloat(document.getElementById("expenseAmt").value);
-      if (desc && !isNaN(amt)) {
-        expenses.push({ desc, amt });
-        balance -= amt;
-        recordBalance();
-        const action = { type: "expense", amount: amt, description: desc, balance: balance.toFixed(2), date: new Date().toISOString() };
-        actionHistory.push(action);
-        if (actionHistory.length > 10) actionHistory.shift(); // Keep only last 10 actions
-        lastAction = action;
+    // Undo the last action
+    function undoLastAction() {
+      if (actionHistory.length > 0) {
+        const lastAction = actionHistory.pop();
+        if (lastAction.type === 'add') {
+          balance -= lastAction.amount;
+        } else if (lastAction.type === 'deduct') {
+          balance += lastAction.amount;
+        }
         updateAll();
-        document.getElementById("expenseDesc").value = "";
-        document.getElementById("expenseAmt").value = "";
       }
     }
 
-    function undoAction(index) {
-      const action = actionHistory[index];
-      if (action.type === "add") {
-        balance -= action.amount;
-      } else if (action.type === "deduct") {
-        balance += action.amount;
-      } else if (action.type === "expense") {
-        balance += action.amount;
-        expenses.pop(); // remove last expense
-      }
-
-      balanceHistory.pop();
-      actionHistory.splice(index, 1); // Remove undone action from history
-      lastAction = null;
-      updateAll();
-    }
-
-    function recordBalance() {
-      const today = new Date().toISOString().split("T")[0];
-      balanceHistory.push({ date: today, balance: parseFloat(balance.toFixed(2)) });
-    }
-
+    // Update the UI and save data
     function updateAll() {
       document.getElementById("balance").textContent = balance.toFixed(2);
-      renderExpenseList();
-      renderActionHistory();
       saveData();
-      updateChart();
     }
 
-    function renderExpenseList() {
-      const list = document.getElementById("expenseList");
-      list.innerHTML = "";
-      expenses.forEach(exp => {
-        const item = document.createElement("li");
-        item.textContent = `${exp.desc} - $${exp.amt.toFixed(2)}`;
-        list.appendChild(item);
-      });
-    }
-
-    function renderActionHistory() {
-      const list = document.getElementById("actionHistory");
-      list.innerHTML = "";
-      actionHistory.forEach((action, index) => {
-        const item = document.createElement("li");
-        item.classList.add("action-item");
-        let actionText = '';
-        if (action.type === 'add') actionText = `Added $${action.amount}`;
-        if (action.type === 'deduct') actionText = `Deducted $${action.amount}`;
-        if (action.type === 'expense') actionText = `Expense: ${action.description} - $${action.amount}`;
-        item.innerHTML = `${actionText} | Balance: $${action.balance} <button onclick="undoAction(${index})" class="undo-btn">Undo</button>`;
-        list.appendChild(item);
-      });
-    }
-
-    document.getElementById("expected").addEventListener("input", () => {
-      localStorage.setItem("capitalExpected", document.getElementById("expected").value);
-    });
-
-    const ctx = document.getElementById('trendChart').getContext('2d');
-    const trendChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Balance Over Time',
-          data: [],
-          borderColor: '#007bff',
-          backgroundColor: 'rgba(0,123,255,0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          x: {
-            title: { display: true, text: 'Date' }
-          },
-          y: {
-            title: { display: true, text: 'Balance ($)' },
-            beginAtZero: true
-          }
-        }
-      }
-    });
-
-    function updateChart() {
-      const dates = balanceHistory.map(e => e.date);
-      const balances = balanceHistory.map(e => e.balance);
-
-      trendChart.data.labels = dates;
-      trendChart.data.datasets[0].data = balances;
-      trendChart.update();
-    }
-
+    // Initialize data when page loads
     loadData();
   </script>
 
