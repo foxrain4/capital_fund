@@ -38,9 +38,13 @@
       color: white;
       border-radius: 5px;
       cursor: pointer;
+      margin-right: 5px;
     }
     button:hover {
       background: #0056b3;
+    }
+    .undo-btn {
+      background-color: crimson;
     }
     ul {
       padding-left: 20px;
@@ -57,6 +61,7 @@
     <input type="number" id="amount" placeholder="Enter amount..." />
     <button onclick="addMoney()">Add</button>
     <button onclick="deductMoney()">Deduct</button>
+    <button onclick="undoLastAction()" class="undo-btn">Undo Last Action</button>
   </div>
 
   <!-- 2. Expense Recorder -->
@@ -64,149 +69,4 @@
     <h2>📘 Record an Expense</h2>
     <input type="text" id="expenseDesc" placeholder="Expense description"/>
     <input type="number" id="expenseAmt" placeholder="Expense amount"/>
-    <button onclick="recordExpense()">Record</button>
-    <ul id="expenseList"></ul>
-  </div>
-
-  <!-- 3. Expected Purchases -->
-  <div class="section">
-    <h2>📝 Expected Purchases</h2>
-    <textarea id="expected" rows="5" placeholder="List future purchases here..." oninput="saveExpected()"></textarea>
-  </div>
-
-  <!-- 4. Balance Over Time Chart -->
-  <div class="section">
-    <h2>📈 Balance Over Time</h2>
-    <canvas id="trendChart"></canvas>
-  </div>
-
-  <script>
-    let balance = 0;
-    let expenses = [];
-    let balanceHistory = [];
-
-    function loadData() {
-      balance = parseFloat(localStorage.getItem("capitalBalance")) || 0;
-      expenses = JSON.parse(localStorage.getItem("capitalExpenses") || "[]");
-      balanceHistory = JSON.parse(localStorage.getItem("capitalBalanceHistory") || "[]");
-      document.getElementById("expected").value = localStorage.getItem("capitalExpected") || "";
-
-      document.getElementById("balance").textContent = balance.toFixed(2);
-      renderExpenseList();
-      updateChart();
-    }
-
-    function saveData() {
-      localStorage.setItem("capitalBalance", balance.toString());
-      localStorage.setItem("capitalExpenses", JSON.stringify(expenses));
-      localStorage.setItem("capitalBalanceHistory", JSON.stringify(balanceHistory));
-    }
-
-    function addMoney() {
-      const amt = parseFloat(document.getElementById("amount").value);
-      if (!isNaN(amt)) {
-        balance += amt;
-        recordBalance();
-        updateAll();
-      }
-    }
-
-    function deductMoney() {
-      const amt = parseFloat(document.getElementById("amount").value);
-      if (!isNaN(amt)) {
-        balance -= amt;
-        recordBalance();
-        updateAll();
-      }
-    }
-
-    function recordExpense() {
-      const desc = document.getElementById("expenseDesc").value.trim();
-      const amt = parseFloat(document.getElementById("expenseAmt").value);
-      if (desc && !isNaN(amt)) {
-        expenses.push({ desc, amt });
-        balance -= amt;
-        recordBalance();
-        updateAll();
-        document.getElementById("expenseDesc").value = "";
-        document.getElementById("expenseAmt").value = "";
-      }
-    }
-
-    function recordBalance() {
-      const today = new Date().toISOString().split("T")[0];
-      balanceHistory.push({ date: today, balance: parseFloat(balance.toFixed(2)) });
-    }
-
-    function updateAll() {
-      document.getElementById("balance").textContent = balance.toFixed(2);
-      renderExpenseList();
-      saveData();
-      updateChart();
-    }
-
-    function renderExpenseList() {
-      const list = document.getElementById("expenseList");
-      list.innerHTML = "";
-      expenses.forEach(exp => {
-        const item = document.createElement("li");
-        item.textContent = `${exp.desc} - $${exp.amt.toFixed(2)}`;
-        list.appendChild(item);
-      });
-    }
-
-    function saveExpected() {
-      const notes = document.getElementById("expected").value;
-      localStorage.setItem("capitalExpected", notes);
-    }
-
-    // Chart setup
-    const ctx = document.getElementById('trendChart').getContext('2d');
-    const trendChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Balance Over Time',
-          data: [],
-          borderColor: '#007bff',
-          backgroundColor: 'rgba(0,123,255,0.1)',
-          fill: true,
-          tension: 0.2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Date'
-            }
-          },
-          y: {
-            title: {
-              display: true,
-              text: 'Balance ($)'
-            },
-            beginAtZero: true
-          }
-        }
-      }
-    });
-
-    function updateChart() {
-      const dates = balanceHistory.map(e => e.date);
-      const balances = balanceHistory.map(e => e.balance);
-
-      trendChart.data.labels = dates;
-      trendChart.data.datasets[0].data = balances;
-      trendChart.update();
-    }
-
-    loadData();
-  </script>
-</body>
-</html>
+    <button onclick="recordExpense(
